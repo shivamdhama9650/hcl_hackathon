@@ -1,21 +1,40 @@
 import datetime
 import os
 from pathlib import Path
+import sys
 from typing import Dict, List, Tuple
 import pandas as pd
 import streamlit as st
 
-from dashboard.charts import (
-    create_avg_los_bar,
-    create_claims_stacked_bar,
-    create_lab_abnormal_bar,
-    create_lab_heatmap,
-    create_occupancy_bar,
-    create_operations_admissions_line,
-    create_readmission_rate_bar,
-    create_readmission_trend_line,
-    create_rejection_rate_bar,
-)
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+try:
+    from dashboard.charts import (
+        create_avg_los_bar,
+        create_claims_stacked_bar,
+        create_lab_abnormal_bar,
+        create_lab_heatmap,
+        create_occupancy_bar,
+        create_operations_admissions_line,
+        create_readmission_rate_bar,
+        create_readmission_trend_line,
+        create_rejection_rate_bar,
+    )
+except ModuleNotFoundError:
+    from charts import (  # type: ignore
+        create_avg_los_bar,
+        create_claims_stacked_bar,
+        create_lab_abnormal_bar,
+        create_lab_heatmap,
+        create_occupancy_bar,
+        create_operations_admissions_line,
+        create_readmission_rate_bar,
+        create_readmission_trend_line,
+        create_rejection_rate_bar,
+    )
+
 from src.config import get_config
 
 st.set_page_config(
