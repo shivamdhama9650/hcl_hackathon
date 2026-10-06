@@ -241,7 +241,7 @@ def main() -> None:
         if f_daily.empty:
             st.info("No operational data available for the chosen date range.")
         else:
-            col_l, col_r = st.columns([3, 2])
+            col_l, col_r = st.columns(2)
             with col_l:
                 fig_adm = create_operations_admissions_line(f_daily)
                 st.plotly_chart(fig_adm, use_container_width=True)
