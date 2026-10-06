@@ -1,0 +1,29 @@
+# Secrets and local configurations
+.env
+*.env
+!.env.example
+
+# Local pipeline data lake and landing storage
+warehouse/
+landing/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

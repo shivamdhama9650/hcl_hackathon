@@ -1,0 +1,68 @@
+[
+  {
+    "user_name": "auditor_user",
+    "role": "COMPLIANCE_AUDITOR",
+    "hospital_id": null,
+    "region": null
+  },
+  {
+    "user_name": "engineer_user",
+    "role": "DATA_ENGINEER",
+    "hospital_id": null,
+    "region": null
+  },
+  {
+    "user_name": "analyst_north",
+    "role": "REGIONAL_ANALYST",
+    "hospital_id": null,
+    "region": "North"
+  },
+  {
+    "user_name": "analyst_south",
+    "role": "REGIONAL_ANALYST",
+    "hospital_id": null,
+    "region": "South"
+  },
+  {
+    "user_name": "analyst_west",
+    "role": "REGIONAL_ANALYST",
+    "hospital_id": null,
+    "region": "West"
+  },
+  {
+    "user_name": "mgr_h01",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H01",
+    "region": null
+  },
+  {
+    "user_name": "mgr_h02",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H02",
+    "region": null
+  },
+  {
+    "user_name": "mgr_h03",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H03",
+    "region": null
+  },
+  {
+    "user_name": "mgr_h04",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H04",
+    "region": null
+  },
+  {
+    "user_name": "mgr_h05",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H05",
+    "region": null
+  },
+  {
+    "user_name": "mgr_h06",
+    "role": "HOSPITAL_MANAGER",
+    "hospital_id": "H06",
+    "region": null
+  }
+]

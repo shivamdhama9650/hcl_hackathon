@@ -1,0 +1,7 @@
+hospital_id,hospital_name,city,region,bed_capacity
+H01,MediSync City Hospital Pune,Pune,West,24
+H02,MediSync Central Hospital Mumbai,Mumbai,West,30
+H03,MediSync Capital Hospital Delhi,Delhi,North,32
+H04,MediSync Care Hospital Chandigarh,Chandigarh,North,18
+H05,MediSync General Hospital Chennai,Chennai,South,26
+H06,MediSync Garden City Hospital Bengaluru,Bengaluru,South,28
