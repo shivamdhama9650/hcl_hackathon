@@ -30,6 +30,13 @@ def build_hospital_daily_admissions(
         return pd.DataFrame(columns=cols)
 
     df = silver_encounters.dropna(subset=["hospital_id", "admit_date"]).copy()
+    if "length_of_stay_days" not in df.columns:
+        if "discharge_date" in df.columns and "admit_date" in df.columns:
+            a_dt = pd.to_datetime(df["admit_date"], errors="coerce")
+            d_dt = pd.to_datetime(df["discharge_date"], errors="coerce")
+            df["length_of_stay_days"] = (d_dt - a_dt).dt.days.clip(lower=1).fillna(1.0)
+        else:
+            df["length_of_stay_days"] = 1.0
 
     # Bed capacity lookup
     hosp_capacity = {}
@@ -156,8 +163,12 @@ def build_claims_summary(
     if silver_claims.empty or silver_encounters.empty:
         return pd.DataFrame(columns=cols)
 
+    claims_input = silver_claims.copy()
+    if "insurer" not in claims_input.columns:
+        claims_input["insurer"] = "UNKNOWN"
+
     enc_hosp = silver_encounters[["encounter_id", "hospital_id"]].drop_duplicates()
-    merged = silver_claims.merge(enc_hosp, on="encounter_id", how="inner")
+    merged = claims_input.merge(enc_hosp, on="encounter_id", how="inner")
 
     if merged.empty:
         return pd.DataFrame(columns=cols)
@@ -220,8 +231,16 @@ def build_lab_abnormality(
     if silver_labs.empty or silver_encounters.empty:
         return pd.DataFrame(columns=cols)
 
+    labs_input = silver_labs.copy()
+    if "result_date" not in labs_input.columns:
+        labs_input["result_date"] = "2026-01-01"
+    if "test_name" not in labs_input.columns and "test_code" in labs_input.columns:
+        labs_input["test_name"] = labs_input["test_code"]
+    if "test_code" not in labs_input.columns and "test_name" in labs_input.columns:
+        labs_input["test_code"] = labs_input["test_name"]
+
     enc_hosp = silver_encounters[["encounter_id", "hospital_id"]].drop_duplicates()
-    merged = silver_labs.merge(enc_hosp, on="encounter_id", how="inner")
+    merged = labs_input.merge(enc_hosp, on="encounter_id", how="inner")
 
     if merged.empty:
         return pd.DataFrame(columns=cols)
