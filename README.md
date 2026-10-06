@@ -2,8 +2,6 @@
 
 Production-grade medallion lakehouse platform for **MediSync Health Network**, unifying synthetic healthcare extracts across 6 hospitals, 3 geographic regions, and 4 file formats into Bronze, Silver, and Gold layers with row-level security and column-level masking.
 
-> 📖 **Full System Architecture & Technical Specifications**: See the complete [ARCHITECTURE.md](ARCHITECTURE.md) document for detailed Mermaid diagrams, schema catalogs, mathematical reconciliation invariants, privacy vault mechanisms, and Databricks Unity Catalog mappings.
-
 ---
 
 ## 1. Architecture Overview (10 Stages)
