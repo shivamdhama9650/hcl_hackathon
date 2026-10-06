@@ -1,7 +1,7 @@
 import datetime
 import logging
 import re
-from typing import Optional
+from typing import Dict, Optional
 import pandas as pd
 
 from src.config import setup_logger
@@ -122,15 +122,15 @@ def compute_age_band(dob_iso: Optional[str], as_of_date: Optional[datetime.date]
 
 
 def compute_length_of_stay(admit_date_iso: Optional[str], discharge_date_iso: Optional[str]) -> Optional[int]:
-    if admit_date_iso is None or discharge_date_iso is None:
+    if admit_date_iso is None or discharge_date_iso is None or pd.isna(admit_date_iso) or pd.isna(discharge_date_iso):
         return None
 
     try:
-        admit = datetime.date.fromisoformat(admit_date_iso)
-        discharge = datetime.date.fromisoformat(discharge_date_iso)
+        admit = datetime.date.fromisoformat(str(admit_date_iso))
+        discharge = datetime.date.fromisoformat(str(discharge_date_iso))
         diff = (discharge - admit).days
         return diff
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -176,3 +176,62 @@ def standardize_test_name(test_name_val: Optional[object]) -> str:
     s = str(test_name_val).strip()
     clean = re.sub(r"\s+", " ", s)
     return clean.upper()
+
+
+CANONICAL_INSURERS: Dict[str, str] = {
+    # Star Health
+    "star health": "Star Health",
+    "star-health": "Star Health",
+    "star health insurance": "Star Health",
+    "star-health insurance": "Star Health",
+    # ICICI Lombard
+    "icici lombard": "ICICI Lombard",
+    "icici-lombard": "ICICI Lombard",
+    "icici lombard insurance": "ICICI Lombard",
+    # HDFC ERGO
+    "hdfc ergo": "HDFC ERGO",
+    "hdfc-ergo": "HDFC ERGO",
+    "hdfc ergo insurance": "HDFC ERGO",
+    # Bajaj Allianz
+    "bajaj allianz": "Bajaj Allianz",
+    "bajaj-allianz": "Bajaj Allianz",
+    "bajaj allianz insurance": "Bajaj Allianz",
+    # Care Health
+    "care health": "Care Health",
+    "care-health": "Care Health",
+    "care health insurance": "Care Health",
+    # Niva Bupa
+    "niva bupa": "Niva Bupa",
+    "niva-bupa": "Niva Bupa",
+    "niva bupa insurance": "Niva Bupa",
+    "max bupa": "Niva Bupa",
+}
+
+
+def cleanse_insurer(insurer_val: Optional[object]) -> str:
+    if insurer_val is None or pd.isna(insurer_val):
+        return "Unknown"
+
+    s = str(insurer_val).strip()
+    if not s:
+        return "Unknown"
+
+    norm = re.sub(r"\s+", " ", s.lower().replace("_", " ")).strip()
+    if norm in CANONICAL_INSURERS:
+        return CANONICAL_INSURERS[norm]
+
+    if "star" in norm:
+        return "Star Health"
+    if "icici" in norm:
+        return "ICICI Lombard"
+    if "hdfc" in norm:
+        return "HDFC ERGO"
+    if "bajaj" in norm:
+        return "Bajaj Allianz"
+    if "care" in norm:
+        return "Care Health"
+    if "niva" in norm or "bupa" in norm:
+        return "Niva Bupa"
+
+    return s.title()
+

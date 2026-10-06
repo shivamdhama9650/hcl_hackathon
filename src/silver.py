@@ -8,6 +8,7 @@ import pandas as pd
 from src.cleanse import (
     cleanse_email,
     cleanse_gender,
+    cleanse_insurer,
     cleanse_name,
     cleanse_phone,
     compute_age_band,
@@ -533,7 +534,7 @@ def process_claims_silver(
         rows_to_load.append({
             "claim_id": c_id,
             "encounter_id": str(row["encounter_id"]).strip(),
-            "insurer": str(row.get("insurer") or "").strip().title(),
+            "insurer": cleanse_insurer(row.get("insurer")),
             "claim_amount": c_amount,
             "approved_amount": app_amount,
             "claim_status": c_status,

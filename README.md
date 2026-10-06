@@ -20,8 +20,9 @@ Production-grade medallion lakehouse platform for **MediSync Health Network**, u
  │                           │                           │
  ▼                           ▼                           ▼
 [Silver Layer]         [Quarantine Layer]         [PII Vault]
-(Cleansed, Typed,      (Rejection Reasons:        (Restricted AES/
- Deduplicated, Masked)  BAD_DATE, ORPHAN_FK, etc)  Tokenized Store)
+(Cleansed, Typed,      (Rejection Reasons:        (Access-Controlled
+ Deduplicated, Masked)  BAD_DATE, ORPHAN_FK, etc)  Tokenized Store;
+                                                   Platform Encryption at Rest)
  │                           │
  ├── (Reconciliation Invariant Checked: Bronze == Silver + Quarantined + Superseded)
  │
@@ -30,10 +31,10 @@ Production-grade medallion lakehouse platform for **MediSync Health Network**, u
  │
  ▼ (Stage 8: Analytics Aggregations Rebuilt Every Run)
 [Gold Layer]
- ├── gold_hospital_daily_admissions (Grain: hospital_id × admission_date)
+ ├── gold_hospital_daily_admissions (Grain: hospital_id × date)
  ├── gold_readmission_30d (Grain: hospital_id × discharge_month)
- ├── gold_claims_summary (Grain: hospital_id × claim_month)
- └── gold_lab_abnormality (Grain: hospital_id × test_code)
+ ├── gold_claims_summary (Grain: hospital_id × insurer × claim_month)
+ └── gold_lab_abnormality (Grain: hospital_id × test_name × result_month)
  │
  ▼ (Stage 9: Audit & Execution Logging)
 [batch_audit Table]
@@ -81,7 +82,7 @@ cp .env.example .env
 Update `.env` with your parameters:
 ```ini
 DATA_ROOT=C:/Users/Shiva/OneDrive/Desktop/hackatoons/MediaSync_Source_Data
-MEDISYNC_SALT=f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4
+MEDISYNC_SALT=<YOUR_SECRET_32_CHAR_HEX_SALT>
 WAREHOUSE_PATH=./warehouse
 LANDING_PATH=./landing
 LOG_LEVEL=INFO
@@ -124,7 +125,7 @@ See the full [Dashboard Guide & Documentation](dashboard/README.md) for screensh
 
 ## 4. Row-Level Security (RLS) Verification Demo
 
-To demonstrate the four role-based access levels, run the simulation script:
+To demonstrate the four role-based access levels across the cumulative data lake (17,587 encounters / 4,400 patients), run the simulation script:
 ```bash
 python -m src.security_demo
 ```
@@ -132,10 +133,10 @@ python -m src.security_demo
 ### Expected Output
 | User Role | User Name | Filter Scope | Masking Level | Encounters Count | Patients Count |
 |---|---|---|---|---|---|
-| **Hospital Manager** | `mgr_h01` | Hospital H01 (Pune) | Masked | 2,742 | 636 |
-| **Regional Analyst** | `analyst_west` | West Region (H01 + H02) | Masked | 5,789 | 1,410 |
-| **Data Engineer** | `engineer_user` | All Hospitals | Masked | 15,985 | 4,000 |
-| **Compliance Auditor** | `auditor_user` | All Hospitals | Unmasked via `pii_vault` | 15,985 | 4,000 |
+| **Hospital Manager** | `mgr_h01` | Hospital H01 (Pune) | Masked | 3,017 | 709 |
+| **Regional Analyst** | `analyst_west` | West Region (H01 + H02) | Masked | 6,371 | 1,577 |
+| **Data Engineer** | `engineer_user` | All Hospitals | Masked | 17,587 | 4,400 |
+| **Compliance Auditor** | `auditor_user` | All Hospitals | Unmasked via `pii_vault` | 17,587 | 4,400 |
 
 ---
 

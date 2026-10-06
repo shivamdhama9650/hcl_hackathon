@@ -5,6 +5,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
+from src.cleanse import cleanse_insurer
 from src.config import AppConfig, setup_logger
 
 logger = setup_logger(__name__)
@@ -37,6 +38,12 @@ def build_hospital_daily_admissions(
             df["length_of_stay_days"] = (d_dt - a_dt).dt.days.clip(lower=1).fillna(1.0)
         else:
             df["length_of_stay_days"] = 1.0
+
+    # Filter for inpatient encounters for hospital admission metrics & bed occupancy
+    if "encounter_type" in df.columns:
+        inp_df = df[df["encounter_type"].astype(str).str.strip().str.title() == "Inpatient"].copy()
+        if not inp_df.empty:
+            df = inp_df
 
     # Bed capacity lookup
     hosp_capacity = {}
@@ -166,6 +173,8 @@ def build_claims_summary(
     claims_input = silver_claims.copy()
     if "insurer" not in claims_input.columns:
         claims_input["insurer"] = "UNKNOWN"
+    else:
+        claims_input["insurer"] = claims_input["insurer"].apply(cleanse_insurer)
 
     enc_hosp = silver_encounters[["encounter_id", "hospital_id"]].drop_duplicates()
     merged = claims_input.merge(enc_hosp, on="encounter_id", how="inner")

@@ -117,8 +117,8 @@ ALTER COLUMN email SET MASK medisync_mask_email;
 ALTER TABLE medisync_catalog.silver.silver_patients
 ALTER COLUMN national_id SET MASK medisync_mask_national_id;
 
-ALTER TABLE medisync_catalog.silver.silver_patients
-ALTER COLUMN date_of_birth SET MASK medisync_mask_dob;
+-- Note: date_of_birth is removed from Silver (transformed to age_band and patient_age).
+-- The raw date_of_birth is isolated in the secure vault schema.
 
 ALTER TABLE medisync_catalog.silver.silver_patients
 ALTER COLUMN original_patient_id SET MASK medisync_mask_patient_id;

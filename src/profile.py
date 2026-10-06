@@ -88,11 +88,12 @@ def profile_entity_dataframe(
                 "severity": "HIGH" if col == business_key else "MEDIUM",
             })
 
-        numeric_vals = pd.to_numeric(s, errors="coerce")
-        if numeric_vals.notna().sum() > 0 and s.dtype.kind in "biufc":
-            metric["min"] = float(numeric_vals.min())
-            metric["max"] = float(numeric_vals.max())
-            metric["mean"] = round(float(numeric_vals.mean()), 2)
+        if s.dtype.kind in "biufc":
+            numeric_vals = pd.to_numeric(s, errors="coerce")
+            if numeric_vals.notna().sum() > 0:
+                metric["min"] = float(numeric_vals.min())
+                metric["max"] = float(numeric_vals.max())
+                metric["mean"] = round(float(numeric_vals.mean()), 2)
 
         col_metrics[col] = metric
 

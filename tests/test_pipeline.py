@@ -311,6 +311,8 @@ def test_gold_table_grains_and_no_pii() -> None:
             "hospital_id": "H01",
             "admit_date": "2026-01-01",
             "discharge_date": "2026-01-03",
+            "encounter_type": "Inpatient",
+            "length_of_stay_days": 2,
         },
         {
             "encounter_id": "E2",
@@ -318,11 +320,13 @@ def test_gold_table_grains_and_no_pii() -> None:
             "hospital_id": "H01",
             "admit_date": "2026-01-10",
             "discharge_date": "2026-01-12",
+            "encounter_type": "Inpatient",
+            "length_of_stay_days": 2,
         },
     ])
 
     gold_adm = build_hospital_daily_admissions(encounters_df)
-    assert not gold_adm.duplicated(subset=["hospital_id", "admission_date"]).any()
+    assert not gold_adm.duplicated(subset=["hospital_id", "date"]).any()
     assert "full_name" not in gold_adm.columns
     assert "phone" not in gold_adm.columns
 
@@ -334,6 +338,7 @@ def test_gold_table_grains_and_no_pii() -> None:
         {
             "claim_id": "C1",
             "encounter_id": "E1",
+            "insurer": "Star Health",
             "claim_amount": 1000.0,
             "approved_amount": 900.0,
             "claim_status": "Approved",
@@ -341,7 +346,7 @@ def test_gold_table_grains_and_no_pii() -> None:
         }
     ])
     gold_claims = build_claims_summary(claims_df, encounters_df)
-    assert not gold_claims.duplicated(subset=["hospital_id", "claim_month"]).any()
+    assert not gold_claims.duplicated(subset=["hospital_id", "insurer", "claim_month"]).any()
 
     labs_df = pd.DataFrame([
         {
@@ -349,11 +354,12 @@ def test_gold_table_grains_and_no_pii() -> None:
             "encounter_id": "E1",
             "test_code": "GLUCOSE",
             "test_name": "GLUCOSE",
+            "result_date": "2026-01-02",
             "lab_flag": "abnormal",
         }
     ])
     gold_labs = build_lab_abnormality(labs_df, encounters_df)
-    assert not gold_labs.duplicated(subset=["hospital_id", "test_code"]).any()
+    assert not gold_labs.duplicated(subset=["hospital_id", "test_name", "result_month"]).any()
     assert "full_name" not in gold_labs.columns
 
 
@@ -361,20 +367,36 @@ def test_gold_table_grains_and_no_pii() -> None:
 # 6. End-to-End Double-Run Idempotency Test
 # =====================================================================
 
-def test_double_run_idempotency() -> None:
-    config = get_config()
-    res1 = run_batch("batch_0", config)
+def test_double_run_idempotency(tmp_path: Path) -> None:
+    base_cfg = get_config()
+    test_cfg = AppConfig(
+        data_root=base_cfg.data_root,
+        landing_path=tmp_path / "landing",
+        warehouse_path=tmp_path / "warehouse",
+        bronze_path=tmp_path / "warehouse" / "bronze",
+        silver_path=tmp_path / "warehouse" / "silver",
+        gold_path=tmp_path / "warehouse" / "gold",
+        quarantine_path=tmp_path / "warehouse" / "quarantine",
+        vault_path=tmp_path / "warehouse" / "vault",
+        audit_path=tmp_path / "warehouse" / "audit",
+        sqlite_db_path=tmp_path / "warehouse" / "medisync_test.db",
+        salt=base_cfg.salt,
+        log_level="INFO",
+    )
+
+    res1 = run_batch("batch_0", test_cfg)
     assert res1["status"] == "SUCCESS"
 
-    silver_patients_1 = load_silver_table(config, config.table_silver_patients)
-    silver_encounters_1 = load_silver_table(config, config.table_silver_encounters)
+    silver_patients_1 = load_silver_table(test_cfg, test_cfg.table_silver_patients)
+    silver_encounters_1 = load_silver_table(test_cfg, test_cfg.table_silver_encounters)
 
-    res2 = run_batch("batch_0", config)
+    res2 = run_batch("batch_0", test_cfg)
     assert res2["status"] == "SUCCESS"
 
-    silver_patients_2 = load_silver_table(config, config.table_silver_patients)
-    silver_encounters_2 = load_silver_table(config, config.table_silver_encounters)
+    silver_patients_2 = load_silver_table(test_cfg, test_cfg.table_silver_patients)
+    silver_encounters_2 = load_silver_table(test_cfg, test_cfg.table_silver_encounters)
 
     assert len(silver_patients_1) == len(silver_patients_2)
     assert len(silver_encounters_1) == len(silver_encounters_2)
     assert res2["rows_loaded"] == 0
+

@@ -72,7 +72,9 @@ def get_config(
     raw_landing = os.getenv("LANDING_PATH", "./landing")
     landing_path = Path(raw_landing).resolve()
 
-    salt = salt_override or os.getenv("MEDISYNC_SALT", "default_medisync_salt_key_secure")
+    salt = salt_override or os.getenv("MEDISYNC_SALT")
+    if not salt or not str(salt).strip():
+        raise ValueError("MEDISYNC_SALT environment variable is required and must not be empty.")
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
     bronze_path = warehouse_path / "bronze"
