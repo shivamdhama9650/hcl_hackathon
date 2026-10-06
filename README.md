@@ -113,6 +113,13 @@ python -m src.pipeline --batch all
 pytest tests/test_pipeline.py -v
 ```
 
+### Run Leadership Dashboard (Streamlit)
+Launch the interactive Streamlit executive dashboard over the Gold Parquet tables:
+```bash
+streamlit run dashboard/app.py
+```
+See the full [Dashboard Guide & Documentation](dashboard/README.md) for screenshots and feature details.
+
 ---
 
 ## 4. Row-Level Security (RLS) Verification Demo

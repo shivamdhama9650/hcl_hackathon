@@ -1,7 +1,7 @@
 import datetime
 import logging
 import sqlite3
-from typing import Dict
+from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
@@ -10,30 +10,95 @@ from src.config import AppConfig, setup_logger
 logger = setup_logger(__name__)
 
 
-def build_hospital_daily_admissions(silver_encounters: pd.DataFrame) -> pd.DataFrame:
+def build_hospital_daily_admissions(
+    silver_encounters: pd.DataFrame,
+    df_hospitals: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    cols = [
+        "hospital_id",
+        "date",
+        "admission_date",
+        "admissions",
+        "discharges",
+        "avg_length_of_stay",
+        "inpatients_in_house",
+        "occupancy_pct",
+        "bed_capacity",
+        "unique_patients",
+    ]
     if silver_encounters.empty:
-        return pd.DataFrame(columns=["hospital_id", "admission_date", "admissions", "unique_patients"])
+        return pd.DataFrame(columns=cols)
 
     df = silver_encounters.dropna(subset=["hospital_id", "admit_date"]).copy()
-    grouped = (
+
+    # Bed capacity lookup
+    hosp_capacity = {}
+    if df_hospitals is not None and not df_hospitals.empty:
+        hosp_capacity = dict(zip(df_hospitals["hospital_id"], df_hospitals["bed_capacity"]))
+
+    # Admission aggregates
+    adm_agg = (
         df.groupby(["hospital_id", "admit_date"], as_index=False)
         .agg(
             admissions=("encounter_id", "count"),
             unique_patients=("patient_id", "nunique"),
+            avg_length_of_stay=("length_of_stay_days", lambda s: round(float(s.dropna().mean()), 2) if not s.dropna().empty else 1.0),
         )
-        .rename(columns={"admit_date": "admission_date"})
-        .sort_values(["hospital_id", "admission_date"])
+        .rename(columns={"admit_date": "date"})
     )
-    return grouped
+
+    # Discharge counts by hospital and date
+    disch_agg = (
+        df.dropna(subset=["discharge_date"])
+        .groupby(["hospital_id", "discharge_date"], as_index=False)
+        .agg(discharges=("encounter_id", "count"))
+        .rename(columns={"discharge_date": "date"})
+    )
+
+    merged = adm_agg.merge(disch_agg, on=["hospital_id", "date"], how="left")
+    merged["discharges"] = merged["discharges"].fillna(0).astype(int)
+    merged["admission_date"] = merged["date"]
+
+    # Capacity and Occupancy calculations
+    def get_capacity(h_id: str) -> int:
+        return int(hosp_capacity.get(h_id, 30))
+
+    merged["bed_capacity"] = merged["hospital_id"].apply(get_capacity)
+
+    # Inpatients estimate based on admissions & LOS
+    merged["inpatients_in_house"] = (
+        (merged["admissions"] * (merged["avg_length_of_stay"].clip(lower=1.0, upper=5.0)))
+        .round()
+        .astype(int)
+    )
+    # Ensure inpatients does not exceed realistic hospital bounds
+    merged["inpatients_in_house"] = np.minimum(
+        merged["inpatients_in_house"],
+        (merged["bed_capacity"] * 1.2).astype(int)
+    )
+    merged["occupancy_pct"] = (
+        (merged["inpatients_in_house"] / merged["bed_capacity"]) * 100.0
+    ).round(2)
+
+    return merged.sort_values(["hospital_id", "date"])[cols]
 
 
 def build_readmission_30d(silver_encounters: pd.DataFrame) -> pd.DataFrame:
+    cols = [
+        "hospital_id",
+        "discharge_month",
+        "index_discharges",
+        "discharges",
+        "readmissions_30d",
+        "readmission_rate",
+        "readmission_rate_pct",
+    ]
     if silver_encounters.empty:
-        return pd.DataFrame(columns=["hospital_id", "discharge_month", "discharges", "readmissions_30d", "readmission_rate"])
+        return pd.DataFrame(columns=cols)
 
     df = silver_encounters.dropna(subset=["hospital_id", "admit_date", "discharge_date"]).copy()
     if df.empty:
-        return pd.DataFrame(columns=["hospital_id", "discharge_month", "discharges", "readmissions_30d", "readmission_rate"])
+        return pd.DataFrame(columns=cols)
 
     df["admit_dt"] = pd.to_datetime(df["admit_date"], errors="coerce")
     df["discharge_dt"] = pd.to_datetime(df["discharge_date"], errors="coerce")
@@ -56,95 +121,128 @@ def build_readmission_30d(silver_encounters: pd.DataFrame) -> pd.DataFrame:
     grouped = (
         df.groupby(["hospital_id", "discharge_month"], as_index=False)
         .agg(
-            discharges=("encounter_id", "count"),
+            index_discharges=("encounter_id", "count"),
             readmissions_30d=("is_readmission_30d", "sum"),
         )
     )
-    grouped["readmission_rate"] = (grouped["readmissions_30d"] / grouped["discharges"]).round(4)
-    return grouped.sort_values(["hospital_id", "discharge_month"])
+    grouped["discharges"] = grouped["index_discharges"]
+    grouped["readmission_rate"] = (grouped["readmissions_30d"] / grouped["index_discharges"]).round(4)
+    grouped["readmission_rate_pct"] = (grouped["readmission_rate"] * 100.0).round(2)
+
+    return grouped.sort_values(["hospital_id", "discharge_month"])[cols]
 
 
 def build_claims_summary(
     silver_claims: pd.DataFrame,
     silver_encounters: pd.DataFrame,
 ) -> pd.DataFrame:
-    columns = [
+    cols = [
         "hospital_id",
+        "insurer",
         "claim_month",
+        "claims_count",
         "total_claims",
+        "total_claimed",
         "total_claim_amount",
-        "avg_claim_amount",
-        "approved_claims",
-        "pending_claims",
-        "rejected_claims",
+        "total_approved",
         "approved_amount",
+        "avg_claim_amount",
+        "rejected_count",
+        "rejected_claims",
+        "pending_count",
+        "pending_claims",
+        "rejection_rate_pct",
     ]
     if silver_claims.empty or silver_encounters.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=cols)
 
     enc_hosp = silver_encounters[["encounter_id", "hospital_id"]].drop_duplicates()
     merged = silver_claims.merge(enc_hosp, on="encounter_id", how="inner")
 
     if merged.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=cols)
 
     merged["claim_dt"] = pd.to_datetime(merged["claim_date"], errors="coerce")
     merged["claim_month"] = merged["claim_dt"].dt.strftime("%Y-%m")
     merged = merged.dropna(subset=["claim_month", "hospital_id"]).copy()
 
     records = []
-    for (hosp, cmonth), group in merged.groupby(["hospital_id", "claim_month"]):
+    for (hosp, ins, cmonth), group in merged.groupby(["hospital_id", "insurer", "claim_month"]):
         tot_claims = len(group)
-        tot_amount = round(float(group["claim_amount"].sum()), 2)
+        tot_claimed = round(float(group["claim_amount"].sum()), 2)
+        tot_approved = round(float(group[group["claim_status"] == "Approved"]["approved_amount"].dropna().sum()), 2)
         avg_amount = round(float(group["claim_amount"].mean()), 2)
 
-        approved_count = int((group["claim_status"] == "Approved").sum())
-        pending_count = int((group["claim_status"] == "Pending").sum())
-        rejected_count = int((group["claim_status"] == "Rejected").sum())
-
-        approved_amt = round(float(group[group["claim_status"] == "Approved"]["approved_amount"].dropna().sum()), 2)
+        rejected = int((group["claim_status"] == "Rejected").sum())
+        pending = int((group["claim_status"] == "Pending").sum())
+        rej_rate_pct = round((rejected / tot_claims) * 100.0, 2) if tot_claims > 0 else 0.0
 
         records.append({
             "hospital_id": hosp,
+            "insurer": ins,
             "claim_month": cmonth,
+            "claims_count": tot_claims,
             "total_claims": tot_claims,
-            "total_claim_amount": tot_amount,
+            "total_claimed": tot_claimed,
+            "total_claim_amount": tot_claimed,
+            "total_approved": tot_approved,
+            "approved_amount": tot_approved,
             "avg_claim_amount": avg_amount,
-            "approved_claims": approved_count,
-            "pending_claims": pending_count,
-            "rejected_claims": rejected_count,
-            "approved_amount": approved_amt,
+            "rejected_count": rejected,
+            "rejected_claims": rejected,
+            "pending_count": pending,
+            "pending_claims": pending,
+            "rejection_rate_pct": rej_rate_pct,
         })
 
     result = pd.DataFrame(records)
     if result.empty:
-        return pd.DataFrame(columns=columns)
-    return result.sort_values(["hospital_id", "claim_month"])
+        return pd.DataFrame(columns=cols)
+    return result.sort_values(["hospital_id", "insurer", "claim_month"])[cols]
 
 
 def build_lab_abnormality(
     silver_labs: pd.DataFrame,
     silver_encounters: pd.DataFrame,
 ) -> pd.DataFrame:
-    columns = ["hospital_id", "test_code", "test_name", "total_tests", "abnormal_tests", "abnormality_rate"]
+    cols = [
+        "hospital_id",
+        "test_name",
+        "test_code",
+        "result_month",
+        "tests_done",
+        "total_tests",
+        "abnormal_count",
+        "abnormal_tests",
+        "abnormality_rate",
+        "abnormal_pct",
+    ]
     if silver_labs.empty or silver_encounters.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=cols)
 
     enc_hosp = silver_encounters[["encounter_id", "hospital_id"]].drop_duplicates()
     merged = silver_labs.merge(enc_hosp, on="encounter_id", how="inner")
 
     if merged.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=cols)
+
+    merged["result_dt"] = pd.to_datetime(merged["result_date"], errors="coerce")
+    merged["result_month"] = merged["result_dt"].dt.strftime("%Y-%m")
+    merged["result_month"] = merged["result_month"].fillna("2026-01")
 
     grouped = (
-        merged.groupby(["hospital_id", "test_code", "test_name"], as_index=False)
+        merged.groupby(["hospital_id", "test_name", "test_code", "result_month"], as_index=False)
         .agg(
-            total_tests=("lab_result_id", "count"),
-            abnormal_tests=("lab_flag", lambda s: (s == "abnormal").sum()),
+            tests_done=("lab_result_id", "count"),
+            abnormal_count=("lab_flag", lambda s: (s == "abnormal").sum()),
         )
     )
-    grouped["abnormality_rate"] = (grouped["abnormal_tests"] / grouped["total_tests"]).round(4)
-    return grouped.sort_values(["hospital_id", "test_code"])
+    grouped["total_tests"] = grouped["tests_done"]
+    grouped["abnormal_tests"] = grouped["abnormal_count"]
+    grouped["abnormality_rate"] = (grouped["abnormal_count"] / grouped["tests_done"]).round(4)
+    grouped["abnormal_pct"] = (grouped["abnormality_rate"] * 100.0).round(2)
+
+    return grouped.sort_values(["hospital_id", "test_name", "result_month"])[cols]
 
 
 def build_gold_layer(config: AppConfig) -> Dict[str, pd.DataFrame]:
@@ -156,7 +254,14 @@ def build_gold_layer(config: AppConfig) -> Dict[str, pd.DataFrame]:
     silver_labs = pd.read_parquet(silver_labs_path) if silver_labs_path.is_file() else pd.DataFrame()
     silver_claims = pd.read_parquet(silver_claims_path) if silver_claims_path.is_file() else pd.DataFrame()
 
-    gold_daily_adm = build_hospital_daily_admissions(silver_encounters)
+    df_hospitals = pd.DataFrame()
+    hosp_file = config.landing_path / "reference" / "hospitals.csv"
+    if hosp_file.is_file():
+        df_hospitals = pd.read_csv(hosp_file)
+    elif (config.data_root / "reference" / "hospitals.csv").is_file():
+        df_hospitals = pd.read_csv(config.data_root / "reference" / "hospitals.csv")
+
+    gold_daily_adm = build_hospital_daily_admissions(silver_encounters, df_hospitals)
     gold_readmissions = build_readmission_30d(silver_encounters)
     gold_claims = build_claims_summary(silver_claims, silver_encounters)
     gold_labs = build_lab_abnormality(silver_labs, silver_encounters)
